@@ -1,13 +1,16 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from enum import Enum
 
-FORMAT_HTML = "html"
-FORMAT_IMAGE = "image"
-FORMAT_JSON = "json"
-FORMAT_TEXT = "text"
-FORMAT_URL = "url"
-FORMAT_VIDEO = "video"
+
+class ListFormats(Enum):
+    FORMAT_HTML = "html"
+    FORMAT_IMAGE = "image"
+    FORMAT_JSON = "json"
+    FORMAT_TEXT = "text"
+    FORMAT_URL = "url"
+    FORMAT_VIDEO = "video"
 
 
 def extra(content, format_type, name=None, mime_type=None, extension=None):
@@ -21,11 +24,11 @@ def extra(content, format_type, name=None, mime_type=None, extension=None):
 
 
 def html(content):
-    return extra(content, FORMAT_HTML)
+    return extra(content, ListFormats.FORMAT_HTML.value)
 
 
 def image(content, name="Image", mime_type="image/png", extension="png"):
-    return extra(content, FORMAT_IMAGE, name, mime_type, extension)
+    return extra(content, ListFormats.FORMAT_IMAGE.value, name, mime_type, extension)
 
 
 def png(content, name="Image"):
@@ -41,19 +44,21 @@ def svg(content, name="Image"):
 
 
 def json(content, name="JSON"):
-    return extra(content, FORMAT_JSON, name, "application/json", "json")
+    return extra(
+        content, ListFormats.FORMAT_JSON.value, name, "application/json", "json"
+    )
 
 
 def text(content, name="Text"):
-    return extra(content, FORMAT_TEXT, name, "text/plain", "txt")
+    return extra(content, ListFormats.FORMAT_TEXT.value, name, "text/plain", "txt")
 
 
 def url(content, name="URL"):
-    return extra(content, FORMAT_URL, name)
+    return extra(content, ListFormats.FORMAT_URL.value, name)
 
 
 def video(content, name="Video", mime_type="video/mp4", extension="mp4"):
-    return extra(content, FORMAT_VIDEO, name, mime_type, extension)
+    return extra(content, ListFormats.FORMAT_VIDEO.value, name, mime_type, extension)
 
 
 def mp4(content, name="Video"):
