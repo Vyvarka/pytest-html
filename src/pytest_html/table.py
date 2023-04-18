@@ -1,40 +1,42 @@
 import re
 import warnings
+from dataclasses import dataclass
+from dataclasses import field
 
 
+@dataclass
 class Table:
-    def __init__(self):
-        self._html = {}
+    _html: field = field(default_factory=dict)
 
     @property
     def html(self):
         return self._html
 
 
+@dataclass
 class Html(Table):
-    def __init__(self):
-        super().__init__()
+    _replace_log: bool = False
+
+    def __post_init__(self):
         self.html.setdefault("html", [])
-        self._replace_log = False
 
     def __delitem__(self, key):
         # This means the log should be removed
         self._replace_log = True
 
     @property
-    def replace_log(self):
+    def replace_log(self) -> bool:
         return self._replace_log
 
     def append(self, html):
         self.html["html"].append(html)
 
 
+@dataclass
 class Cell(Table):
-    def __init__(self):
-        super().__init__()
-        self._append_counter = 0
-        self._pop_counter = 0
-        self._sortables = dict()
+    _append_counter: int = 0
+    _pop_counter: int = 0
+    _sortables: field = field(default_factory=dict)
 
     def __setitem__(self, key, value):
         warnings.warn(
@@ -58,16 +60,22 @@ class Cell(Table):
     def insert(self, index, html):
         # backwards-compat
         if not isinstance(html, str):
-            if html.__module__.startswith("py."):
-                warnings.warn(
-                    "The 'py' module is deprecated and support "
-                    "will be removed in a future release.",
-                    DeprecationWarning,
-                )
-            html = str(html)
-            html = html.replace("col=", "data-column-type=")
+            html = self.check_html(html=html)
+
         self._extract_sortable(html)
         self._html[index] = html
+
+    @staticmethod
+    def check_html(html):
+        if html.__module__.startswith("py."):
+            warnings.warn(
+                "The 'py' module is deprecated and support "
+                "will be removed in a future release.",
+                DeprecationWarning,
+            )
+        html = str(html)
+        html = html.replace("col=", "data-column-type=")
+        return html
 
     def pop(self, *args):
         self._pop_counter += 1
@@ -83,10 +91,12 @@ class Cell(Table):
             self._sortables[sortable] = value
 
 
+@dataclass
 class Header(Cell):
     pass
 
 
+@dataclass
 class Row(Cell):
     def __delitem__(self, key):
         # This means the item should be removed
