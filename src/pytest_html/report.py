@@ -6,7 +6,7 @@ from pytest_html.basereport import BaseReport
 
 
 class Report(BaseReport):
-    def __init__(self, report_path, config):
+    def __init__(self, report_path: Path, config) -> None:
         super().__init__(report_path, config)
         self._assets_path = Path(self._report_path.parent, "assets")
         self._assets_path.mkdir(parents=True, exist_ok=True)
@@ -19,11 +19,17 @@ class Report(BaseReport):
     def css(self):
         return Path(self._assets_path.name, "style.css")
 
-    def _data_content(self, content, asset_name, *args, **kwargs):
+    def _data_content(self, content: str, asset_name: str, *args, **kwargs) -> str:
+        """
+        Write data content to the asset file.
+        """
         content = content.encode("utf-8")
         return self._write_content(content, asset_name)
 
-    def _media_content(self, content, asset_name, *args, **kwargs):
+    def _media_content(self, content: str, asset_name: str, *args, **kwargs) -> str:
+        """
+        Write media content to the asset file.
+        """
         try:
             media_data = base64.b64decode(content.encode("utf-8"), validate=True)
             return self._write_content(media_data, asset_name)
@@ -31,7 +37,10 @@ class Report(BaseReport):
             # if not base64 content, just return as it's a file or link
             return content
 
-    def _write_content(self, content, asset_name):
+    def _write_content(self, content: bytes, asset_name: str) -> str:
+        """
+        Write content to the asset file.
+        """
         content_relative_path = Path(self._assets_path, asset_name)
         content_relative_path.write_bytes(content)
         return str(content_relative_path.relative_to(self._report_path.parent))
