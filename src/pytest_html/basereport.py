@@ -3,6 +3,7 @@ import json
 import os
 import re
 import warnings
+from abc import abstractmethod
 from collections import defaultdict
 from functools import partial
 from pathlib import Path
@@ -32,84 +33,112 @@ except ImportError:
     _ansi_styles = []
 
 
+class ReportData:
+    """
+    This class is used for storing  the data necessary for generating
+    an HTML report of a test session.
+    """
+
+    def __init__(self, title: str, config) -> None:
+        self._config = config
+        self._data: dict = {
+            "title": title,
+            "collectedItems": 0,
+            "runningState": "not_started",
+            "environment": {},
+            "tests": defaultdict(list),
+            "resultsTableHeader": {},
+            "additionalSummary": defaultdict(list),
+        }
+
+        collapsed: str = config.getini("render_collapsed")
+        if collapsed:
+            self._handle_render_collapsed(collapsed)
+
+    def _handle_render_collapsed(self, collapsed: str) -> None:
+        """
+        Handles the rendering of collapsed data.
+        """
+        if collapsed.lower() == "true":
+            warnings.warn(
+                "'render_collapsed = True' is deprecated and support "
+                "will be removed in the next major release. "
+                "Please use 'render_collapsed = all' instead.",
+                DeprecationWarning,
+            )
+        self.set_data(
+            "collapsed", [outcome.lower() for outcome in collapsed.split(",")]
+        )
+
+    @property
+    def title(self) -> str:
+        return self._data["title"]
+
+    @title.setter
+    def title(self, title: str) -> None:
+        self._data["title"] = title
+
+    @property
+    def config(self):
+        return self._config
+
+    @property
+    def data(self) -> dict:
+        return self._data
+
+    def set_data(self, key: str, value) -> None:
+        """
+        Sets the data for a given key.
+        """
+        self._data[key] = value
+
+    def add_test(
+        self, test_data: dict, report, row: Row, remove_log: bool = False
+    ) -> bool:
+        """
+        Adds the test data to the ReportData object, processing
+        the log if necessary.
+        """
+        for sortable, value in row.sortables.items():
+            test_data[sortable] = value
+
+        # regardless of pass or fail we must add teardown logging to "call"
+        if report.when == "teardown" and not remove_log:
+            self.update_test_log(report)
+
+        # passed "setup" and "teardown" are not added to the html
+        if report.when == "call" or (
+            report.when in ["setup", "teardown"] and report.outcome != "passed"
+        ):
+            if not remove_log:
+                processed_logs = _process_logs(report)
+                test_data["log"] = _handle_ansi(processed_logs)
+            self._data["tests"][report.nodeid].append(test_data)
+            return True
+
+        return False
+
+    def update_test_log(self, report) -> None:
+        """
+        Updates the log for the test in the ReportData object.
+        """
+        log = []
+        for test in self._data["tests"][report.nodeid]:
+            if test["testId"] == report.nodeid and "log" in test:
+                for section in report.sections:
+                    header, content = section
+                    if "teardown" in header:
+                        log.append(f"{' ' + header + ' ':-^80}")
+                        log.append(content)
+                test["log"] += _handle_ansi("\n".join(log))
+
+
 class BaseReport:
-    class ReportData:
-        def __init__(self, title, config):
-            self._config = config
-            self._data = {
-                "title": title,
-                "collectedItems": 0,
-                "runningState": "not_started",
-                "environment": {},
-                "tests": defaultdict(list),
-                "resultsTableHeader": {},
-                "additionalSummary": defaultdict(list),
-            }
+    """
+    This class represents the base class used to generate HTML reports.
+    """
 
-            collapsed = config.getini("render_collapsed")
-            if collapsed:
-                if collapsed.lower() == "true":
-                    warnings.warn(
-                        "'render_collapsed = True' is deprecated and support "
-                        "will be removed in the next major release. "
-                        "Please use 'render_collapsed = all' instead.",
-                        DeprecationWarning,
-                    )
-                self.set_data(
-                    "collapsed", [outcome.lower() for outcome in collapsed.split(",")]
-                )
-
-        @property
-        def title(self):
-            return self._data["title"]
-
-        @title.setter
-        def title(self, title):
-            self._data["title"] = title
-
-        @property
-        def config(self):
-            return self._config
-
-        @property
-        def data(self):
-            return self._data
-
-        def set_data(self, key, value):
-            self._data[key] = value
-
-        def add_test(self, test_data, report, row, remove_log=False):
-            for sortable, value in row.sortables.items():
-                test_data[sortable] = value
-
-            # regardless of pass or fail we must add teardown logging to "call"
-            if report.when == "teardown" and not remove_log:
-                self.update_test_log(report)
-
-            # passed "setup" and "teardown" are not added to the html
-            if report.when == "call" or (
-                report.when in ["setup", "teardown"] and report.outcome != "passed"
-            ):
-                if not remove_log:
-                    processed_logs = _process_logs(report)
-                    test_data["log"] = _handle_ansi(processed_logs)
-                self._data["tests"][report.nodeid].append(test_data)
-                return True
-
-            return False
-
-        def update_test_log(self, report):
-            log = []
-            for test in self._data["tests"][report.nodeid]:
-                if test["testId"] == report.nodeid and "log" in test:
-                    for section in report.sections:
-                        header, content = section
-                        if "teardown" in header:
-                            log.append(f"{' ' + header + ' ':-^80}")
-                            log.append(content)
-                    test["log"] += _handle_ansi("\n".join(log))
-
-    def __init__(self, report_path, config, default_css="style.css"):
+    def __init__(self, report_path: Path, config, default_css="style.css") -> None:
         self._report_path = Path(os.path.expandvars(report_path)).expanduser()
         self._report_path.parent.mkdir(parents=True, exist_ok=True)
         self._resources_path = Path(__file__).parent.joinpath("resources")
@@ -122,14 +151,17 @@ class BaseReport:
             config.getini("max_asset_filename_length")
         )
 
-        self._report = self.ReportData(self._report_path.name, config)
+        self._report = ReportData(self._report_path.name, config)
 
     @property
     def css(self):
         # implement in subclasses
         return
 
-    def _asset_filename(self, test_id, extra_index, test_index, file_extension):
+    def _asset_filename(self, test_id, extra_index, test_index, file_extension) -> str:
+        """
+        Generating of the asset filename.
+        """
         return "{}_{}_{}.{}".format(
             re.sub(r"[^\w.]", "_", test_id),
             str(extra_index),
@@ -137,7 +169,10 @@ class BaseReport:
             file_extension,
         )[-self._max_asset_filename_length :]
 
-    def _generate_report(self, self_contained=False):
+    def _generate_report(self, self_contained: bool = False) -> None:
+        """
+        Generating of the report.
+        """
         generated = datetime.datetime.now()
         rendered_report = self._render_html(
             generated.strftime("%d-%b-%Y"),
@@ -154,6 +189,9 @@ class BaseReport:
         self._write_report(rendered_report)
 
     def _generate_environment(self):
+        """
+        Generating the environment.
+        """
         metadata = self._config._metadata
         for key in metadata.keys():
             value = metadata[key]
@@ -163,7 +201,7 @@ class BaseReport:
 
         return metadata
 
-    def _is_redactable_environment_variable(self, environment_variable):
+    def _is_redactable_environment_variable(self, environment_variable) -> bool:
         redactable_regexes = self._config.getini("environment_table_redact_list")
         for redactable_regex in redactable_regexes:
             if re.match(redactable_regex, environment_variable):
@@ -171,13 +209,24 @@ class BaseReport:
 
         return False
 
+    @abstractmethod
     def _data_content(self, *args, **kwargs):
+        """
+        Placeholder method to be implemented in subclasses.
+        """
         pass
 
+    @abstractmethod
     def _media_content(self, *args, **kwargs):
+        """
+        Placeholder method to be implemented in subclasses.
+        """
         pass
 
     def _process_extras(self, report, test_id):
+        """
+        Processes the extras for the report.
+        """
         test_index = hasattr(report, "rerun") and report.rerun + 1 or 0
         report_extras = getattr(report, "extras", [])
         for extra_index, extra in enumerate(report_extras):
@@ -220,6 +269,9 @@ class BaseReport:
         prefix,
         postfix,
     ):
+        """
+        Rendering of the HTML for the report.
+        """
         return self._template.render(
             date=date,
             time=time,
@@ -233,6 +285,9 @@ class BaseReport:
         )
 
     def _write_report(self, rendered_report):
+        """
+        Writing of the report.
+        """
         with self._report_path.open("w", encoding="utf-8") as f:
             f.write(rendered_report)
 
@@ -346,10 +401,7 @@ def _process_logs(report):
         log.append(content)
 
         # weird formatting related to logs
-        if "log" in header:
-            log.append("")
-            if "call" in header:
-                log.append("")
+        log += ["" for v in header if v == "log" or v == "call"]
     if not log:
         log.append("No log output captured.")
     return "\n".join(log)
