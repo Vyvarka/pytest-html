@@ -2,8 +2,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from src.pytest_html.basereport import ReportData
-from src.pytest_html.table import Row
+from pytest_html.basereport import ReportData
+from pytest_html.table import Row
 
 
 class TestReportData:

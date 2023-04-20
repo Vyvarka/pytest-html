@@ -3,8 +3,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from src.pytest_html.table import Cell
-from src.pytest_html.table import Html
+from pytest_html.table import Cell
+from pytest_html.table import Html
 
 
 class TestHtml:
