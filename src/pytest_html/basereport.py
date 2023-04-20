@@ -402,10 +402,6 @@ def _process_logs(report):
 
         # weird formatting related to logs
         log += ["" for v in header if v == "log" or v == "call"]
-        # if "log" in header:
-        #     log.append("")
-        #     if "call" in header:
-        #         log.append("")
     if not log:
         log.append("No log output captured.")
     return "\n".join(log)
